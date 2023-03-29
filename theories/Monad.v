@@ -51,3 +51,52 @@ Module MonadNotations.
     : monad_scope.
 
 End MonadNotations.
+
+Import MonadNotations.
+
+Class MonadTransformer (L : (Type -> Type) -> (Type → Type)) :=
+{
+  mon_trans_mon : ∀ M, Monad M → Monad (L M) ;
+  lift : ∀ M, Monad M → ∀ A, M A -> L M A 
+}.
+
+Open Scope type_scope.
+
+Definition id {X : Type} := fun x : X => x.
+
+#[export] Instance MonadId : Monad id := {
+  ret := @id ;
+  bind := fun A B x f => f x
+}.
+
+Class Errors := error_type : Type.
+
+Inductive result `{E : Errors} A : Type :=
+  | ok : A -> result A
+  | error : error_type -> result A.
+
+Arguments ok {E A}.
+Arguments error {E A}.
+
+#[export, refine] Instance MonadTransResult `{Errors} :
+  MonadTransformer (fun M A => M (result A)) := {}.
+Proof.
+  - intros M HM.
+    split.
+    + exact (fun _ x => ret (ok x)).
+    + exact (
+        fun _ _ v f =>
+          v >>=
+          (fun v =>
+            match v with
+            | ok x => f x
+            | error e => ret (error e)
+            end)
+      ).
+  - intros M HM A x.
+    exact (x >>= (fun y => (ret (ok y)))).
+Defined.
+
+Definition success {M} `{Monad M} `{E : Errors} : M (result unit) := ret (ok tt).
+Definition raise {M} `{Monad M} `{Errors} {A : Type} (e : error_type): M (result A) :=
+  ret (error e).
