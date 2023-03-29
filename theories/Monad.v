@@ -64,7 +64,9 @@ Open Scope type_scope.
 
 Definition id {X : Type} := fun x : X => x.
 
-#[export] Instance MonadId : Monad id := {
+Arguments id {_} _ /.
+
+#[local] Instance MonadId : Monad id := {
   ret := @id ;
   bind := fun A B x f => f x
 }.
