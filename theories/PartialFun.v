@@ -94,8 +94,36 @@ Fixpoint _bind {A B C D} (c : orec A B C) (f : C → orec A B D) : orec A B D :=
   | undefined => undefined
   end.
 
+(* Monadic structure *)
+
+#[export] Instance MonadOrec {A B} : Monad (orec A B) := {|
+  ret C x := _ret x ;
+  bind C D c f := _bind c f
+|}.
+
+(* Combining orec with other effects *)
+
+Class OrecEffect (M : Type → Type) := {
+  combined : ∀ (A : Type) (B : A → Type) (C : Type), Type ;
+  combined_monad : ∀ A B, Monad (combined A B) ;
+  rec : ∀ {A : Type} {B : A → Type} (x : A), combined A (λ x, M (B x)) (B x) ;
+  call : ∀ {A : Type} {B : A → Type} {F : Type} (f : F) `{PFun F f} (x : psrc f), combined A (λ x, M (B x)) (ptgt f x)
+}.
+
+(* The pure instance *)
+#[local]Instance OrecPure : OrecEffect id := {|
+  combined := orec ;
+  combined_monad A B := MonadOrec ;
+  rec A B x := _rec x (λ y, ret y) ;
+  call A B F f Hf x := _call f x (λ y, ret y) ;
+|}.
+
+Notation "∇ x , M ♯ B" :=
+  (∀ x, combined (M := M) _ (λ x, M B) B)
+  (x binder, at level 200).
+
 Notation "∇ x , B" :=
-  (∀ x, orec _ (λ x, B) B)
+  (∇ x, id ♯ B)
   (x binder, at level 200).
 
 Notation "A ⇀ B" :=
@@ -646,30 +674,6 @@ Defined.
 
 (* Handy notation for autodef *)
 Notation "f @ x" := (autodef f x) (at level 10).
-
-(* orec is a monad *)
-#[export] Instance MonadOrec {A B} : Monad (orec A B) := {|
-  ret C x := _ret x ;
-  bind C D c f := _bind c f
-|}.
-
-(* It has some actions *)
-Definition rec {A B} (x : A) : orec A B (B x) :=
-  _rec x (λ y, ret y).
-
-Definition call {A B} {F} f `{PFun F f} (x : psrc f) : orec A B (ptgt f x) :=
-  _call f x (λ y, ret y).
-
-(* Combining orec with other effects (rather constrained) *)
-
-Class OrecEffect (M : Type → Type) := {
-  combined : ∀  (A : Type) (B : A → Type) (C : Type), Type ;
-  combined_monad : ∀ A B, Monad (combined A B)
-}.
-
-Notation "∇ x , M ♯ B" :=
-  (∀ x, combined (M := M) _ (λ x, M B) B)
-  (x binder, at level 200).
 
 (* Useful tactics *)
 

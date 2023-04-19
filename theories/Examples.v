@@ -9,6 +9,8 @@ Set Default Goal Selector "!".
 Set Equations Transparent.
 Set Universe Polymorphism.
 
+#[local]Existing Instance OrecPure.
+
 (* Small examples *)
 
 Equations div : ∇ (p : nat * nat), nat :=
@@ -476,36 +478,10 @@ Qed.
   type.
 *)
 
-Inductive exn E A :=
-| success (x : A)
-| exception (e : E).
+#[local]Existing Instance MonadExn.
+#[local]Existing Instance MonadExnT.
 
-Arguments success {E A}.
-Arguments exception {E A}.
-
-Definition exn_bind {E A B} (c : exn E A) (f : A → exn E B) :=
-  match c with
-  | success x => f x
-  | exception e => exception e
-  end.
-
-#[local] Instance MonadExn {E} : Monad (exn E) := {|
-  ret A x := success x ;
-  bind A B c f := exn_bind c f
-|}.
-
-(* Exception monad transformer *)
-#[local] Instance MonadExnT {E M} `{Monad M} : Monad (λ A, M (exn E A)) := {|
-  ret A x := ret (success x) ;
-  bind A B c f := bind (M := M) c (λ x,
-    match x with
-    | success y => f y
-    | exception e => ret (exception e)
-    end
-  )
-|}.
-
-Inductive error :=
+Inductive division_error :=
 | DivisionByZero.
 
 Definition orec_exn E A B C := orec A B (exn E C).
@@ -516,26 +492,26 @@ Proof.
   apply MonadExnT.
 Defined.
 
-Class MonadRaise E (M : Type → Type) := {
-  raise : ∀ (A : Type), E → M A
-}.
-
-Arguments raise {E M _ A} e.
-
-#[local] Instance MonadRaiseExnT {E M} `{Monad M} : MonadRaise E (λ A, M (exn E A)) := {|
-  raise A e := ret (exception e)
-|}.
-
 #[local] Instance MonadRaiseOrecExn {E A B} : MonadRaise E (orec_exn E A B).
 Proof.
   apply MonadRaiseExnT.
 Defined.
 
+Definition exn_rec (E A : Type) (B : A → Type) (x : A) : orec_exn E A (fun x => exn E (B x)) (B x) :=
+  rec (OrecEffect := OrecPure) (B := fun x => exn E (B x)) x.
+
+Definition exn_call E (A : Type) (B : A → Type) (F : Type) (f : F) `(PFun F f) (x : psrc f) : orec_exn E A (fun x => exn E (B x)) (ptgt f x) :=
+  b ← call (OrecEffect := OrecPure) f x ;;
+  ret (success b).
+
 #[local] Instance OrecEffectExn E : OrecEffect (exn E) := {|
-  combined A B := orec_exn E A B
+  combined A B := orec_exn E A B ;
+  combined_monad A B := MonadOrecExn ;
+  rec := exn_rec E ;
+  call := exn_call E
 |}.
 
-Equations ediv : ∇ (p : nat * nat), exn error ♯ nat :=
+Equations ediv : ∇ (p : nat * nat), exn division_error ♯ nat :=
   ediv (n, 0) := raise DivisionByZero ;
   ediv (0, m) := ret 0 ;
   ediv (n, m) := S <*> rec (n - m, m).
@@ -555,12 +531,6 @@ Proof.
     + apply ih. lia.
     + intros [] _. all: cbn. all: constructor.
 Qed.
-
-Definition succeeds {E A} (m : exn E A) :=
-  match m with
-  | success _ => true
-  | _ => false
-  end.
 
 Lemma ediv_noraise :
   funind ediv
