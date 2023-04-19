@@ -713,6 +713,8 @@ Proof.
   - apply def_graph_sound.
 Defined.
 
+#[export] Instance pfun_exn E A B (f : ∇ (x : A), exn E ♯ (B x)) : PFun f := pfun_gen A _ f.
+
 (* Handy notation for autodef *)
 Notation "f @ x" := (autodef f x) (at level 10).
 
