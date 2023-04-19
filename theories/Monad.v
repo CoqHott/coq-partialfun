@@ -52,6 +52,15 @@ Module MonadNotations.
 
 End MonadNotations.
 
+(** ** Identity Monad *)
+
+Definition id {A : Type} (x : A) := x.
+
+#[local]Instance MonadId : Monad id := {|
+  ret := @id ;
+  bind A B x f := f x
+|}.
+
 (** ** The error monad and monad transformer *)
 
 Inductive exn E A :=
@@ -92,6 +101,9 @@ Arguments raise {E M _ A} e.
 #[local] Instance MonadRaiseExnT {E M} `{Monad M} : MonadRaise E (λ A, M (exn E A)) := {|
   raise A e := ret (exception e)
 |}.
+
+#[local] Instance MonadRaiseExn {E M} `{Monad M} : MonadRaise E (exn E) := 
+  MonadRaiseExnT (M := id).
 
 Definition succeeds {E A} (m : exn E A) :=
   match m with
