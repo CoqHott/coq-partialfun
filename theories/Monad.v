@@ -102,7 +102,7 @@ Arguments raise {E M _ A} e.
   raise A e := ret (exception e)
 |}.
 
-#[local] Instance MonadRaiseExn {E M} `{Monad M} : MonadRaise E (exn E) := 
+#[local] Instance MonadRaiseExn {E} : MonadRaise E (exn E) := 
   MonadRaiseExnT (M := id).
 
 Definition succeeds {E A} (m : exn E A) :=
