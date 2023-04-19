@@ -111,6 +111,9 @@ Class OrecEffect (M : Type → Type) := {
   undefined : ∀ {A B C}, combined A B C
 }.
 
+Definition call {F : Type} (f : F) `{PFun F f} (x : psrc f) {M : Type -> Type} `{OrecEffect M} {A : Type} {B : A -> Type} : combined A (fun x => M (B x)) (ptgt f x) := call' f x.
+
+#[global]Instance MonadOrecCombined {M : Type → Type} `{OrecEffect M} {A : Type} {B : A → Type} : Monad (combined A B) := combined_monad A B.
 
 (* The pure instance *)
 
@@ -122,6 +125,8 @@ Class OrecEffect (M : Type → Type) := {
   undefined A B C := _undefined
 |}.
 
+#[global] Typeclasses Opaque combined.
+Arguments combined : simpl never.
 
 Notation "∇ x , M ♯ B" :=
   (∀ x, combined (M := M) _ (λ x, M B) B)
