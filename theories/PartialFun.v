@@ -110,25 +110,60 @@ Class OrecEffect (M : Type → Type) := {
   call : ∀ {A : Type} {B : A → Type} {F : Type} (f : F) `{PFun F f} (x : psrc f), combined A (λ x, M (B x)) (ptgt f x)
 }.
 
+
 (* The pure instance *)
-#[local]Instance OrecPure : OrecEffect id := {|
+
+#[local]Instance OrecPure : OrecEffect Monad.id := {|
   combined := orec ;
   combined_monad A B := MonadOrec ;
   rec A B x := _rec x (λ y, ret y) ;
-  call A B F f Hf x := _call f x (λ y, ret y) ;
+  call' A B F f Hf x := _call f x (λ y, ret y) ;
+  undefined A B C := _undefined
 |}.
+
 
 Notation "∇ x , M ♯ B" :=
   (∀ x, combined (M := M) _ (λ x, M B) B)
   (x binder, at level 200).
 
 Notation "∇ x , B" :=
-  (∇ x, id ♯ B)
+  (∇ x, Monad.id ♯ B)
   (x binder, at level 200).
 
 Notation "A ⇀ B" :=
   (∇ (_ : A), B)
   (at level 199).
+
+(* The exceptional instance *)
+
+Definition orec_exn E A B C := orec A B (exn E C).
+#[global] Typeclasses Opaque orec_exn.
+
+#[local] Instance MonadOrecExn {E A B} : Monad (orec_exn E A B).
+Proof.
+  apply MonadExnT.
+Defined.
+
+#[local] Instance MonadRaiseOrecExn {E A B} : MonadRaise E (orec_exn E A B).
+Proof.
+  apply MonadRaiseExnT.
+Defined.
+
+Definition exn_rec (E A : Type) (B : A → Type) (x : A) : orec_exn E A (fun x => exn E (B x)) (B x) :=
+  rec x.
+
+Definition exn_call E (A : Type) (B : A → Type) (F : Type) (f : F) `(PFun F f) (x : psrc f) : orec_exn E A (fun x => exn E (B x)) (ptgt f x) :=
+  map success (call f x).
+
+Definition exn_undefined E A B C : orec_exn E A B C := _undefined.
+
+#[local] Instance OrecEffectExn E : OrecEffect (exn E) := {|
+  combined A B := orec_exn E A B ;
+  combined_monad A B := MonadOrecExn ;
+  rec := exn_rec E ;
+  call' := exn_call E ;
+  undefined := exn_undefined E
+|}.
 
 #[local] Notation "t ∙1" := (proj1_sig t) (at level 20).
 #[local] Notation "⟨ x ⟩" := (exist _ x _) (only parsing).

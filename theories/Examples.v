@@ -478,38 +478,11 @@ Qed.
   type.
 *)
 
-#[local]Existing Instance MonadExn.
-#[local]Existing Instance MonadExnT.
-
 Inductive division_error :=
 | DivisionByZero.
 
-Definition orec_exn E A B C := orec A B (exn E C).
-#[local] Typeclasses Opaque orec_exn.
-
-#[local] Instance MonadOrecExn {E A B} : Monad (orec_exn E A B).
-Proof.
-  apply MonadExnT.
-Defined.
-
-#[local] Instance MonadRaiseOrecExn {E A B} : MonadRaise E (orec_exn E A B).
-Proof.
-  apply MonadRaiseExnT.
-Defined.
-
-Definition exn_rec (E A : Type) (B : A → Type) (x : A) : orec_exn E A (fun x => exn E (B x)) (B x) :=
-  rec (OrecEffect := OrecPure) (B := fun x => exn E (B x)) x.
-
-Definition exn_call E (A : Type) (B : A → Type) (F : Type) (f : F) `(PFun F f) (x : psrc f) : orec_exn E A (fun x => exn E (B x)) (ptgt f x) :=
-  b ← call (OrecEffect := OrecPure) f x ;;
-  ret (success b).
-
-#[local] Instance OrecEffectExn E : OrecEffect (exn E) := {|
-  combined A B := orec_exn E A B ;
-  combined_monad A B := MonadOrecExn ;
-  rec := exn_rec E ;
-  call := exn_call E
-|}.
+#[local]Existing Instance MonadExn.
+#[local]Existing Instance MonadExnT.
 
 Equations ediv : ∇ (p : nat * nat), exn division_error ♯ nat :=
   ediv (n, 0) := raise DivisionByZero ;
