@@ -79,19 +79,19 @@ Inductive orec A B C :=
 | _ret (x : C)
 | _rec (x : A) (κ : B x → orec A B C)
 | _call F f `{hf : PFun F f} (x : psrc f) (κ : ptgt f x → orec A B C)
-| undefined.
+| _undefined.
 
 Arguments _ret {A B C}.
 Arguments _rec {A B C}.
 Arguments _call {A B C F} f {hf}.
-Arguments undefined {A B C}.
+Arguments _undefined {A B C}.
 
 Fixpoint _bind {A B C D} (c : orec A B C) (f : C → orec A B D) : orec A B D :=
   match c with
   | _ret x => f x
   | _rec x κ => _rec x (λ y, _bind (κ y) f)
   | _call g x κ => _call g x (λ y, _bind (κ y) f)
-  | undefined => undefined
+  | _undefined => _undefined
   end.
 
 (* Monadic structure *)
@@ -107,7 +107,8 @@ Class OrecEffect (M : Type → Type) := {
   combined : ∀ (A : Type) (B : A → Type) (C : Type), Type ;
   combined_monad : ∀ A B, Monad (combined A B) ;
   rec : ∀ {A : Type} {B : A → Type} (x : A), combined A (λ x, M (B x)) (B x) ;
-  call : ∀ {A : Type} {B : A → Type} {F : Type} (f : F) `{PFun F f} (x : psrc f), combined A (λ x, M (B x)) (ptgt f x)
+  call' : ∀ {A : Type} {B : A → Type} {F : Type} (f : F) `{PFun F f} (x : psrc f), combined A (λ x, M (B x)) (ptgt f x) ;
+  undefined : ∀ {A B C}, combined A B C
 }.
 
 
