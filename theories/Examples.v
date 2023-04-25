@@ -5,9 +5,12 @@ From PartialFun Require Import PartialFun Monad.
 Import ListNotations.
 Import MonadNotations.
 
+Import StdInstance.
+
 Set Default Goal Selector "!".
 Set Equations Transparent.
 Set Universe Polymorphism.
+
 
 (* Small examples *)
 
@@ -321,6 +324,8 @@ Lemma conv_sound :
 Proof.
   intros [u v] _. simpl.
   intros u' hu v' hv e.
+  change (graph eval (u, sNil) u') in hu.
+  change (graph eval (v, sNil) v') in hv.
   funind eval_sound in hu.
   funind eval_sound in hv.
   exists u', v'.
