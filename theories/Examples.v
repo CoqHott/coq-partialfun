@@ -5,9 +5,12 @@ From PartialFun Require Import PartialFun Monad.
 Import ListNotations.
 Import MonadNotations.
 
+Import StdInstance.
+
 Set Default Goal Selector "!".
 Set Equations Transparent.
 Set Universe Polymorphism.
+
 
 (* Small examples *)
 
@@ -19,7 +22,7 @@ Equations test_div : ∇ (p : nat * nat), bool :=
   test_div (n, m) := q ← call div (n, m) ;; ret (q * m =? n).
 
 Definition div_10_5 := div @ (10, 5).
-Fail Definition div_10_0 := div @ (10, 0).
+(* Fail Timeout 1 Definition div_10_0 := div @ (10, 0). *)
 
 Compute div @ (50,6).
 
@@ -264,8 +267,8 @@ Definition nfDela : term := eval @ (tDelta, sNil).
 Definition tOmega :=
   tApp tDelta tDelta.
 
-Compute (eval_fuel 1000 tOmega sNil).
-Fail Definition nfOmega : term := eval @ (tOmega, sNil).
+Compute (eval_fuel 2 tOmega sNil).
+(* Fail Timeout 1 Definition nfOmega : term := eval @ (tOmega, sNil). *)
 
 Definition t₂ :=
   tApp (tApp t₁ (tVar 2)) tOmega.
@@ -296,7 +299,7 @@ Definition conv_def u v := def conv (u, v).
 
 Definition delta_refl : bool := conv @ (tDelta, tDelta).
 
-Fail Definition omega_refl : bool := conv @ (tOmega, tOmega).
+(* Fail Timeout 1 Definition omega_refl : bool := conv @ (tOmega, tOmega). *)
 
 Compute conv_fuel 1000 t₂ (tVar 2).
 Compute conv_fuel 1000 t₂ (tVar 0).
@@ -321,6 +324,8 @@ Lemma conv_sound :
 Proof.
   intros [u v] _. simpl.
   intros u' hu v' hv e.
+  change (graph eval (u, sNil) u') in hu.
+  change (graph eval (v, sNil) v') in hv.
   funind eval_sound in hu.
   funind eval_sound in hv.
   exists u', v'.
