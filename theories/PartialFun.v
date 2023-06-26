@@ -436,11 +436,11 @@ Section WithIndexes.
       - destruct de as [v hg]. depelim hg.
     Defined.
 
-    Definition orec_inst'@{u} {a} := orec_inst@{u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u} (a:=a).
+    (* Definition orec_inst'@{u} {a} := orec_inst@{u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u} (a:=a). *)
 
     Equations def_p (x : A) (h : domain x) : image x
       by wf x partial_lt :=
-      def_p x h := orec_inst' (a := x) (f x) _ _ _ (λ y hy hr, def_p y _).
+      def_p x h := orec_inst (a := x) (f x) _ _ _ (λ y hy hr, def_p y _).
 
     Definition def x h :=
       def_p x h ∙1.
