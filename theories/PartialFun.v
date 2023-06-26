@@ -52,6 +52,7 @@ Arguments NotEnoughFuel {A}.
 Arguments Undefined {A}.
 
 Derive NoConfusion NoConfusionHom for Fueled.
+Set Primitive Projections.
 
 (* Partial function class *)
 Class PFun {A} (f : A) := {
@@ -272,7 +273,8 @@ Section WithIndexes.
         econstructor.
         + eapply hr. eassumption.
         + apply ih. assumption.
-      - simpl in e. destruct pfueled as [w | |] eqn:e'. 2,3: discriminate.
+      - simpl in e. 
+        destruct (pfueled _ _ _) as [w | |] eqn:e'. 2,3: discriminate.
         econstructor.
         + eapply pfueled_graph. eassumption.
         + apply ih. assumption.
@@ -434,9 +436,11 @@ Section WithIndexes.
       - destruct de as [v hg]. depelim hg.
     Defined.
 
+    Definition orec_inst'@{u} {a} := orec_inst@{u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u} (a:=a).
+
     Equations def_p (x : A) (h : domain x) : image x
       by wf x partial_lt :=
-      def_p x h := orec_inst (a := x) (f x) _ _ _ (λ y hy hr, def_p y _).
+      def_p x h := orec_inst' (a := x) (f x) _ _ _ (λ y hy hr, def_p y _).
 
     Definition def x h :=
       def_p x h ∙1.
@@ -488,7 +492,7 @@ Section WithIndexes.
         + apply h.
         + assumption.
       - simpl in *.
-        destruct pfueled as [w | |] eqn:e'. 2,3: discriminate.
+        destruct (pfueled _ _ _) as [w | |] eqn:e'. 2,3: discriminate.
         eapply ih. 2: eassumption.
         apply h. eapply pfueled_graph. eassumption.
       - discriminate.
