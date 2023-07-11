@@ -741,13 +741,13 @@ Section WithIndexes.
     (∀ x, irec ϕ _ (λ x, B) B)
     (x binder, ϕ at level 50, at level 200).
 
-  Section Test.
+  (* Section Test.
     Context {I : Type} {F : I -> Type}
     (ϕ : forall i, F i)
     `{pfun : forall i, PFun (ϕ i)}.
 
     Check ∇[ ϕ ] _, _.
-  End Test.
+  End Test. *)
 
   Notation "A ⇀[ ϕ ] B" :=
     (∇[ϕ] (_ : A), B)
