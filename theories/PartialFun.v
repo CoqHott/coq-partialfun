@@ -8,6 +8,7 @@ Import ListNotations.
 
 Set Default Goal Selector "!".
 Set Equations Transparent.
+Unset Equations With Funext.
 Set Universe Polymorphism.
 Set Polymorphic Inductive Cumulativity.
 
@@ -132,6 +133,10 @@ Section WithIndexes.
   #[local] Notation "⟨ x ⟩" := (exist _ x _) (only parsing).
   #[local] Notation "⟨ x | h ⟩" := (exist _ x h).
 
+  #[local] Notation "t .1" := (projT1 t) (at level 20).
+  #[local] Notation "t .2" := (projT2 t) (at level 20).
+  #[local] Notation "( x ; y )" := (existT _ x y).
+
   Section Lib.
     Context {A B} (f : ∇ (x : A), B x).
 
@@ -156,6 +161,26 @@ Section WithIndexes.
 
     Definition graph x v :=
       orec_graph (f x) v.
+
+      Inductive orec_graphT {a} : orec A B (B a) → B a → Type :=
+      | ret_graphT :
+          ∀ x,
+            orec_graphT (_ret x) x
+  
+      | rec_graphT :
+          ∀ x κ v w,
+            orec_graphT (f x) v →
+            orec_graphT (κ v) w →
+            orec_graphT (_rec x κ) w
+  
+      | call_graphT :
+          ∀ g x κ v w,
+            pgraph (ϕ g) x v →
+            orec_graphT (κ v) w →
+            orec_graphT (_call g x κ) w.
+  
+      Definition graphT x v :=
+        orec_graphT (f x) v.
 
     Inductive orec_lt {a} : A → orec A B (B a) → Prop :=
     | top_lt :
@@ -201,6 +226,15 @@ Section WithIndexes.
         assert (v = v0).
         { apply pgraph_fun. all: assumption. }
         subst. apply IHhv. assumption.
+    Qed.
+
+    Lemma orec_graphT_graph :
+      ∀ a o v,
+        orec_graphT (a := a) o v →
+        orec_graph o v.
+    Proof.
+      induction 1.
+      all: econstructor ; eauto.
     Qed.
 
     Lemma lt_preserves_domain :
@@ -385,14 +419,17 @@ Section WithIndexes.
 
     Definition orec_domain {a} (o : orec A B (B a)) :=
       ∃ v, orec_graph o v.
+    
+    Definition oimageT {a} (o : orec A B (B a)) :=
+        { v & orec_graphT o v }.
 
     Equations? orec_inst {a} (e : orec A B (B a)) (de : orec_domain e)
       (da : domain a)
       (ha : ∀ x, orec_lt x e → partial_lt x a)
-      (r : ∀ y, domain y → partial_lt y a → image y) : oimage e :=
-      orec_inst (_ret v) de da ha r := ⟨ v ⟩ ;
-      orec_inst (_rec x κ) de da ha r := ⟨ (orec_inst (κ ((r x _ _) ∙1)) _ _ _ r) ∙1 ⟩ ;
-      orec_inst (_call g x κ) de da ha r := ⟨ (orec_inst (κ (pdef (ϕ g) x _)) _ _ _ r) ∙1 ⟩ ;
+      (r : ∀ y, domain y → partial_lt y a → oimageT (f y)) : oimageT e :=
+      orec_inst (_ret v) de da ha r := (v ; _);
+      orec_inst (_rec x κ) de da ha r := ((orec_inst (κ (projT1 (r x _ _))) _ _ _ r).1; _) ;
+      orec_inst (_call g x κ) de da ha r := ((orec_inst (κ (pdef (ϕ g) x _)) _ _ _ r).1; _) ;
       orec_inst undefined de da ha r := False_rect _ _.
     Proof.
       - constructor.
@@ -401,13 +438,15 @@ Section WithIndexes.
       - apply ha. constructor.
       - destruct de as [v hg]. depelim hg. simpl in *.
         destruct r as [w hw]. simpl.
-        red in hw.
         assert (w = v0).
-        { eapply orec_graph_functional. all: eassumption. }
+        { eapply orec_graph_functional.
+          1: eapply orec_graphT_graph. all: eassumption. }
         subst.
         eexists. eassumption.
       - apply ha. econstructor. 2: eassumption.
-        red. destruct r. assumption.
+        red. destruct r. 
+        eapply orec_graphT_graph.
+        assumption.
       - simpl. destruct orec_inst. simpl.
         econstructor. 2: eassumption.
         destruct r. assumption.
@@ -438,19 +477,35 @@ Section WithIndexes.
 
     (* Definition orec_inst'@{u} {a} := orec_inst@{u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u u} (a:=a). *)
 
-    Equations def_p (x : A) (h : domain x) : image x
+    #[derive(equations=no)]Equations def_p (x : A) (h : domain x) : oimageT (f x)
       by wf x partial_lt :=
       def_p x h := orec_inst (a := x) (f x) _ _ _ (λ y hy hr, def_p y _).
 
     Definition def x h :=
-      def_p x h ∙1.
+      (def_p x h).1.
 
     Lemma def_graph_sound :
       ∀ x h,
         graph x (def x h).
     Proof.
       intros x h.
-      unfold def. destruct def_p. assumption.
+      unfold def. destruct def_p. apply orec_graphT_graph. assumption.
+    Qed.
+
+    Lemma orec_graph_graphT :
+    ∀ x v,
+      graph x v →
+      graphT x v.
+    Proof.
+      intros x v h.
+      unshelve epose proof (def_p x _) as [v' hT].
+      1: eexists ; eassumption.
+      assert (v = v').
+      { eapply orec_graph_functional.
+        - eassumption.
+        - apply orec_graphT_graph. assumption.
+      }
+      subst. assumption.
     Qed.
 
     (* Well-founded version with automatic domain inferrence *)
@@ -474,229 +529,177 @@ Section WithIndexes.
     Definition funind (pre : precond) post :=
       ∀ x, pre x → orec_ind_step x pre post (f x).
 
-    (* The fueled case *)
+    (* Functional induction on the graph *)
 
-    Lemma orec_fuel_inst_ind_step :
-      ∀ a n pre post o r v,
-        orec_ind_step a pre post o →
-        orec_fuel_inst n o r = Success v →
-        (∀ x w, pre x → r x = Success w → post x w) →
-        post a v.
-    Proof.
-      intros a n pre post o r v h e hr.
-      induction o as [w | x κ ih | g x κ ih |] in v, h, e |- *.
-      - simpl in *. noconf e. assumption.
-      - simpl in *. destruct r as [w | |] eqn:e'. 2,3: discriminate.
-        eapply ih. 2: eassumption.
-        apply h. eapply hr.
-        + apply h.
-        + assumption.
-      - simpl in *.
-        destruct (pfueled _ _ _) as [w | |] eqn:e'. 2,3: discriminate.
-        eapply ih. 2: eassumption.
-        apply h. eapply pfueled_graph. eassumption.
-      - discriminate.
-    Qed.
+  Lemma orec_graph_inst_ind_step :
+    ∀ pre post x o v,
+      funind pre post →
+      orec_ind_step x pre post o →
+      pre x →
+      orec_graph o v →
+      post x v.
+  Proof.
+    intros pre post x o v hind h hpre hgraph.
+    induction hgraph as [w | x y κ v w hy ihy hκ ihκ | x i y κ v w hy hκ ihκ].
+    all: cbn in *.
+    - assumption.
+    - destruct h as [hpy hv].
+      apply ihκ. 2: assumption.
+      apply hv. apply ihy. 2: assumption.
+      apply hind. assumption.
+    - apply ihκ. 2: assumption.
+      apply h. assumption.
+  Qed.
 
-    Lemma funind_fuel_gen :
-      ∀ pre post x n fumes v,
-        funind pre post →
-        pre x →
-        (∀ x v, fumes x = Success v → pre x → post x v) →
-        fueled_gen n fumes x = Success v →
-        post x v.
-    Proof.
-      intros pre post x n fumes v h hpre hfumes e.
-      induction n as [| n ih] in x, v, hpre, e, fumes, hfumes |- *.
-      - simpl in e. apply hfumes. all: assumption.
-      - simpl in e. eapply orec_fuel_inst_ind_step. 2: eassumption.
-        + apply h. assumption.
-        + intros y w hy e'.
-          eapply ih. 1,3: eassumption.
-          simpl.
-          intros z u hz e2.
-          eapply ih. all: eassumption.
-    Qed.
+  Lemma funind_graph :
+    ∀ pre post x v,
+      funind pre post →
+      pre x →
+      graph x v →
+      post x v.
+  Proof.
+    intros pre post x v h hpre hgraph.
+    eapply orec_graph_inst_ind_step.
+    all: eauto.
+  Qed.
 
-    Lemma funind_fuel :
-      ∀ pre post x n v,
-        funind pre post →
-        pre x →
-        fueled n x = Success v →
-        post x v.
-    Proof.
-      intros pre post x n v h hpre e.
-      eapply funind_fuel_gen. 1,2,4: eassumption.
-      simpl. intros. discriminate.
-    Qed.
+  (* The fueled case *)
 
-    (* The wf case *)
+  Lemma funind_fuel :
+    ∀ pre post x n v,
+      funind pre post →
+      pre x →
+      fueled n x = Success v →
+      post x v.
+  Proof.
+    intros pre post x n v h hpre ?%fueled_graph_sound.
+    eapply funind_graph. all: eauto.
+  Qed.
 
-    Lemma orec_inst_ind_step :
-      ∀ a o hdo da ha (r : ∀ y, domain y → partial_lt y a → image y) pre post,
-        orec_ind_step a pre post o →
-        (∀ x h hlt, pre x → post x ((r x h hlt) ∙1)) →
-        post a ((orec_inst (a := a) o hdo da ha r) ∙1).
-    Proof.
-      intros a o hdo da ha r pre post ho hr.
-      induction o as [w | x κ ih | g x κ ih |] in ha, hdo, ho |- *.
-      - simpl in ho. simp orec_inst.
-      - simpl in ho. simp orec_inst. simpl.
-        apply ih. apply ho. apply hr. apply ho.
-      - simpl in ho. simp orec_inst. simpl.
-        apply ih. eapply ho. apply pdef_graph.
-      - destruct hdo as [? h]. depelim h.
-    Qed.
+  (* The wf case *)
 
-    Lemma def_ind :
-      ∀ pre post x h,
-        funind pre post →
-        pre x →
-        post x (def x h).
-    Proof.
-      intros pre post x h ho hpre.
-      unfold def.
-      revert hpre.
-      (* funelim fails with an anomaly *)
-      apply_funelim (def_p x h). intros.
-      refine (orec_inst_ind_step _ _ _ _ _ _ _ _ _ _).
-      - apply ho. assumption.
-      - intros. eapply H1. assumption.
-    Qed.
+  Lemma def_ind :
+    ∀ pre post x h,
+      funind pre post →
+      pre x →
+      post x (def x h).
+  Proof.
+    intros pre post x h ho hpre.
+    pose proof def_graph_sound.
+    eapply funind_graph. all: eauto.
+  Qed.
 
-    (* We deduce the graph case from the above *)
+  (* Same as funind but for Type *)
 
-    Lemma funind_graph :
-      ∀ pre post x v,
-        funind pre post →
-        pre x →
-        graph x v →
-        post x v.
-    Proof.
-      intros pre post x v h hpre e.
-      assert (hx : domain x).
-      { eexists. eassumption. }
-      pose proof (def_graph_sound x hx) as hgr.
-      assert (v = def x hx).
-      { eapply orec_graph_functional. all: eassumption. }
-      subst.
-      eapply def_ind. all: eassumption.
-    Qed.
+  Notation precondT := (A → Type).
+  Notation postcondT := (∀ x, B x → Type).
 
-    (* Same as funind but for Type *)
+  Fixpoint orec_ind_stepT a (pre : precondT) (post : postcondT) o :=
+    match o with
+    | _ret v => post a v
+    | _rec x κ => pre x * ∀ v, post x v → orec_ind_stepT a pre post (κ v)
+    | _call g x κ => ∀ v, pgraph (ϕ g) x v → orec_ind_stepT a pre post (κ v)
+    | undefined => True
+    end%type.
 
-    Notation precondT := (A → Type).
-    Notation postcondT := (∀ x, B x → Type).
+  Definition funrect pre post :=
+    ∀ x, pre x → orec_ind_stepT x pre post (f x).
 
-    Fixpoint orec_ind_stepT a (pre : precondT) (post : postcondT) o :=
-      match o with
-      | _ret v => post a v
-      | _rec x κ => pre x * ∀ v, post x v → orec_ind_stepT a pre post (κ v)
-      | _call g x κ => ∀ v, pgraph (ϕ g) x v → orec_ind_stepT a pre post (κ v)
-      | undefined => True
-      end%type.
+  Lemma orec_graph_inst_rect_step :
+    ∀ pre post x y v,
+      funrect pre post →
+      orec_ind_stepT x pre post y →
+      pre x →
+      orec_graphT y v →
+      post x v.
+  Proof.
+    intros pre post x y v hind h hpre hgraph.
+    induction hgraph as [w | x y κ v w hy ihy hκ ihκ | x i y κ v w hy hκ ihκ].
+    all: cbn in *.
+    - assumption.
+    - destruct h as [hpy hv].
+      apply ihκ. 2: assumption.
+      apply hv. apply ihy. 2: assumption.
+      apply hind. assumption.
+    - apply ihκ. 2: assumption.
+      apply h. assumption.
+  Qed.
 
-    Definition funrect pre post :=
-      ∀ x, pre x → orec_ind_stepT x pre post (f x).
+  Lemma funrect_graph :
+    ∀ pre post x v,
+      funrect pre post →
+      pre x →
+      graph x v →
+      post x v.
+  Proof.
+    intros pre post x v h hpre hgraph%orec_graph_graphT.
+    eapply orec_graph_inst_rect_step.
+    all: eauto.
+  Qed.
 
-    Lemma orec_inst_ind_stepT :
-      ∀ a o hdo da ha (r : ∀ y, domain y → partial_lt y a → image y) pre post,
-        orec_ind_stepT a pre post o →
-        (∀ x h hlt, pre x → post x ((r x h hlt) ∙1)) →
-        post a ((orec_inst (a := a) o hdo da ha r) ∙1).
-    Proof.
-      intros a o hdo da ha r pre post ho hr.
-      induction o as [w | x κ ih | g x κ ih |] in ha, hdo, ho |- *.
-      - simpl in ho. simp orec_inst.
-      - simpl in ho. simp orec_inst. simpl.
-        apply ih. apply ho. apply hr. apply ho.
-      - simpl in ho. simp orec_inst. simpl.
-        apply ih. eapply ho. apply pdef_graph.
-      - exfalso. destruct hdo as [? h]. depelim h.
-    Qed.
+  (* The fueled case *)
 
-    Lemma def_rect :
-      ∀ pre post x h,
-        funrect pre post →
-        pre x →
-        post x (def x h).
-    Proof.
-      intros pre post x h ho hpre.
-      unfold def.
-      revert hpre.
-      (* funelim fails with an anomaly *)
-      apply_funelim (def_p x h). intros.
-      refine (orec_inst_ind_stepT _ _ _ _ _ _ _ _ _ _).
-      - apply ho. assumption.
-      - intros. eapply X1. assumption.
-    Qed.
+  Lemma funrect_fuel :
+    ∀ pre post x n v,
+      funrect pre post →
+      pre x →
+      fueled n x = Success v →
+      post x v.
+  Proof.
+    intros pre post x n v h hpre ?%fueled_graph_sound.
+    eapply funrect_graph. all: eauto.
+  Qed.
 
-    Lemma funrect_graph :
-      ∀ pre post x v,
-        funrect pre post →
-        pre x →
-        graph x v →
-        post x v.
-    Proof.
-      intros pre post x v h hpre e.
-      assert (hx : domain x).
-      { eexists. eassumption. }
-      pose proof (def_graph_sound x hx) as hgr.
-      assert (v = def x hx).
-      { eapply orec_graph_functional. all: eassumption. }
-      subst.
-      eapply def_rect. all: eassumption.
-    Qed.
+  (* The wf case *)
 
-    Lemma funrect_fuel :
-      ∀ pre post x n v,
-        funrect pre post →
-        pre x →
-        fueled n x = Success v →
-        post x v.
-    Proof.
-      intros pre post x n v h hpre e.
-      eapply fueled_graph_sound in e.
-      eapply funrect_graph in e. all: eassumption.
-    Qed.
+  Lemma def_rect :
+    ∀ pre post x h,
+      funrect pre post →
+      pre x →
+      post x (def x h).
+  Proof.
+    intros pre post x h ho hpre.
+    pose proof def_graph_sound.
+    eapply funrect_graph. all: eauto.
+  Qed.
 
-    (* Computing the domain, easier than using the graph *)
+  (* Computing the domain, easier than using the graph *)
 
-    Fixpoint comp_domain {a} (o : orec A B a) :=
-      match o with
-      | _ret v => True
-      | _rec x κ => domain x ∧ ∀ v, graph x v → comp_domain (κ v)
-      | _call g x κ => pdomain (ϕ g) x ∧ ∀ v, pgraph (ϕ g) x v → comp_domain (κ v)
-      | undefined => False
-      end.
+  Fixpoint comp_domain {a} (o : orec A B a) :=
+    match o with
+    | _ret v => True
+    | _rec x κ => domain x ∧ ∀ v, graph x v → comp_domain (κ v)
+    | _call g x κ => pdomain (ϕ g) x ∧ ∀ v, pgraph (ϕ g) x v → comp_domain (κ v)
+    | undefined => False
+    end.
 
-    Lemma comp_domain_orec_domain :
-      ∀ a (o : orec A B (B a)),
-        comp_domain o →
-        orec_domain o.
-    Proof.
-      intros a o h.
-      induction o as [w | x κ ih | g x κ ih |] in h |- *.
-      - eexists. constructor.
-      - simpl in h. destruct h as [[v hx] hκ].
-        specialize (hκ v hx). apply ih in hκ. destruct hκ as [w h].
-        eexists. econstructor. all: eassumption.
-      - simpl in h. destruct h as [[v hx] hκ].
-        specialize (hκ v hx). apply ih in hκ. destruct hκ as [w h].
-        eexists. econstructor. all: eassumption.
-      - contradiction.
-    Qed.
+  Lemma comp_domain_orec_domain :
+    ∀ a (o : orec A B (B a)),
+      comp_domain o →
+      orec_domain o.
+  Proof.
+    intros a o h.
+    induction o as [w | x κ ih | g x κ ih |] in h |- *.
+    - eexists. constructor.
+    - simpl in h. destruct h as [[v hx] hκ].
+      specialize (hκ v hx). apply ih in hκ. destruct hκ as [w h].
+      eexists. econstructor. all: eassumption.
+    - simpl in h. destruct h as [[v hx] hκ].
+      specialize (hκ v hx). apply ih in hκ. destruct hκ as [w h].
+      eexists. econstructor. all: eassumption.
+    - contradiction.
+  Qed.
 
-    Lemma compute_domain :
-      ∀ x,
-        comp_domain (f x) →
-        domain x.
-    Proof.
-      intro x. apply comp_domain_orec_domain.
-    Qed.
+  Lemma compute_domain :
+    ∀ x,
+      comp_domain (f x) →
+      domain x.
+  Proof.
+    intro x. apply comp_domain_orec_domain.
+  Qed.
 
-    (* Now we can let it compute *)
-    Transparent wf_partial.
+  (* Now we can let it compute *)
+  Transparent wf_partial.
 
   End Lib.
 
@@ -927,5 +930,3 @@ Tactic Notation "funind" constr(p) "in" hyp(h) "as" ident(na) :=
   end.
 
 End StdInstance.
-
-
