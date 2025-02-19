@@ -738,28 +738,48 @@ Section Lib.
   (* Note that the postcondition is dependent on the precondition *)
 
   Notation precondT := (A → Type).
-  Notation postcondT := (λ pre, ∀ x, pre x → B x → Type).
+  Notation postcondT_dep := (λ pre, ∀ x, B x → pre x → Type).
+  Notation postcondT := (λ pre, ∀ x, B x → Type).
 
-  Fixpoint orec_ind_stepT a (pre : precondT) (post : postcondT pre) (o : orec I _ _ _) :=
+  Fixpoint orec_ind_stepT_dep a (pre : precondT) (post : postcondT_dep pre) (o : orec I _ _ _) (p : pre a) :=
     match o with
-    | _ret v => ∀ p, post a p v
-    | _rec x κ => { p : pre x & ∀ v, graph x v → post x p v → orec_ind_stepT a pre post (κ v) }
-    | _call g x κ => ∀ v, cp_graph g x v → orec_ind_stepT a pre post (κ v)
+    | _ret v => post a v p
+    | _rec x κ => { p' : pre x & ∀ v, graph x v → post x v p' → orec_ind_stepT_dep a pre post (κ v) p}
+    | _call g x κ => ∀ v, cp_graph g x v → orec_ind_stepT_dep a pre post (κ v) p
     | undefined => True
     end%type.
 
   Definition funrect pre post :=
+    ∀ x p, orec_ind_stepT_dep x pre post (f x) p.
+
+  Fixpoint orec_ind_stepT a (pre : precondT) (post : postcondT pre) (o : orec I _ _ _) :=
+    match o with
+    | _ret v => post a v
+    | _rec x κ => pre x * (∀ v, graph x v → post x v → orec_ind_stepT a pre post (κ v))
+    | _call g x κ => ∀ v, cp_graph g x v → orec_ind_stepT a pre post (κ v)
+    | undefined => True
+    end%type.
+
+  Definition funrec pre post :=
     ∀ x, pre x → orec_ind_stepT x pre post (f x).
 
-  Lemma orec_graph_inst_rect_step :
-    ∀ pre post x y v,
-      funrect pre post →
-      orec_ind_stepT x pre post y →
-      orec_graphT y v →
-      ∀ (p : pre x),
-      post x p v.
+  Lemma funrect_nodep pre post : funrec pre post → funrect pre (fun x v _ => post x v).
   Proof.
-    intros pre post x y v hind h hgraph hpre.
+    intros hind x v.
+    specialize (hind x v).
+    induction (f x) ; cbn in hind |- * ; eauto.
+    destruct hind.
+    eexists ; eauto.
+  Qed.
+
+  Lemma orec_graph_inst_rect_step :
+    ∀ pre post x y v p,
+      funrect pre post →
+      orec_ind_stepT_dep x pre post y p →
+      orec_graphT y v →
+      post x v p.
+  Proof.
+    intros pre post x y v p hind h hgraph.
     induction hgraph as [w | x y κ v w hy ihy hκ ihκ | x i y κ v w hy hκ ihκ].
     all: cbn in *.
     - auto.
@@ -767,7 +787,7 @@ Section Lib.
       apply ihκ.
       apply hv. 1: now eapply graphT_graph.
       apply ihy.
-      apply hind. assumption.
+      apply hind.
     - apply ihκ.
       apply h. assumption.
   Qed.
@@ -775,13 +795,25 @@ Section Lib.
   Lemma funrect_graph :
     ∀ pre post x v,
       funrect pre post →
-      graph x v →
       ∀ (p : pre x),
-      post x p v.
+      graph x v →
+      post x v p.
   Proof.
-    intros pre post x v h hgraph%graph_graphT hpre.
+    intros pre post x v h hpre hgraph%graph_graphT.
     eapply orec_graph_inst_rect_step.
     all: eauto.
+  Qed.
+
+  Lemma funrec_graph :
+  ∀ pre post x v,
+    funrec pre post →
+    pre x →
+    graph x v →
+    post x v.
+  Proof.
+    intros pre post x v h%funrect_nodep hpre hgraph.
+    pattern x, v, hpre.
+    eapply funrect_graph ; eauto.
   Qed.
 
   (* The fueled case *)
@@ -789,12 +821,24 @@ Section Lib.
   Lemma funrect_fuel :
     ∀ pre post x n v,
       funrect pre post →
-      fueled n x = Success v →
       ∀ (p : pre x),
-      post x p v.
+      fueled n x = Success v →
+      post x v p.
   Proof.
-    intros pre post x n v h ?%fueled_graph_sound hpre.
+    intros pre post x n v h hpre ?%fueled_graph_sound.
     eapply funrect_graph. all: eauto.
+  Qed.
+
+
+  Lemma funrec_fuel :
+  ∀ pre post x n v,
+    funrec pre post →
+    pre x →
+    fueled n x = Success v →
+    post x v.
+  Proof.
+    intros pre post x n v h hpre ?%fueled_graph_sound.
+    eapply funrec_graph. all: eauto.
   Qed.
 
   (* The wf case *)
@@ -803,11 +847,22 @@ Section Lib.
     ∀ pre post x h,
       funrect pre post →
       ∀ (p : pre x),
-      post x p (def x h).
+      post x (def x h) p.
   Proof.
     intros pre post x h ho hpre.
     pose proof def_graph_sound.
     eapply funrect_graph. all: eauto.
+  Qed.
+
+  Lemma def_rec :
+    ∀ pre post x h,
+    funrec pre post →
+    pre x →
+    post x (def x h).
+  Proof.
+    intros pre post x h ho hpre.
+    pose proof def_graph_sound.
+    eapply funrec_graph. all: eauto.
   Qed.
 
   (* Computing the domain, easier than using the graph *)
